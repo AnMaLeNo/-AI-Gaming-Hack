@@ -92,7 +92,7 @@
                 ],
                 'paint': {
                     'fill-extrusion-color': '#1a1c23', 
-                    'fill-extrusion-height': 4, 
+                    'fill-extrusion-height': 50, // Bâtiments géants de 50 mètres
                     'fill-extrusion-base': 0,
                     'fill-extrusion-opacity': 1.0 
                 }
@@ -107,7 +107,8 @@
                 'source': 'pois',
                 'paint': {
                     'fill-extrusion-color': ['get', 'color'],
-                    'fill-extrusion-height': ['+', ['get', 'height'], 5], 
+                    // On ajoute 55 mètres à tous les POIs (Pour être plus grands que les 50m des bâtiments)
+                    'fill-extrusion-height': ['+', ['get', 'height'], 55], 
                     'fill-extrusion-base': 0, 
                     'fill-extrusion-opacity': 1.0 
                 }
