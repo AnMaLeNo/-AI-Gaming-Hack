@@ -1,114 +1,145 @@
 const fs = require('fs');
 
-const bbox = "48.83, 2.30, 48.88, 2.40"; 
+const tags = [
+  'node["amenity"="pharmacy"]', 'way["amenity"="pharmacy"]',
+  'node["amenity"="hospital"]', 'way["amenity"="hospital"]',
+  'node["amenity"="clinic"]', 'way["amenity"="clinic"]',
+  'node["amenity"="police"]', 'way["amenity"="police"]',
+  'node["shop"="supermarket"]', 'way["shop"="supermarket"]'
+];
 
-// On cherche maintenant les noeuds (points) ET les ways (polygones/bâtiments)
-const query = `
-[out:json][timeout:60];
-(
-  node["amenity"="pharmacy"](${bbox});
-  way["amenity"="pharmacy"](${bbox});
-  node["amenity"="hospital"](${bbox});
-  way["amenity"="hospital"](${bbox});
-  node["amenity"="clinic"](${bbox});
-  way["amenity"="clinic"](${bbox});
-  node["amenity"="police"](${bbox});
-  way["amenity"="police"](${bbox});
-  node["shop"="supermarket"](${bbox});
-  way["shop"="supermarket"](${bbox});
-);
-out geom;
-`;
+async function fetchAll() {
+  let allFeatures = [];
+  console.log("Fetching POIs for Île-de-France...");
 
-console.log("Fetching nodes and ways via French OSM endpoint...");
-
-fetch("https://overpass.openstreetmap.fr/api/interpreter", {
-    method: "POST",
-    headers: {
-        "Accept": "application/json",
-        "User-Agent": "HackathonApp",
-        "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: "data=" + encodeURIComponent(query)
-})
-.then(r => r.json())
-.then(data => {
-    const features = [];
-    if (data.elements) {
-        for (const el of data.elements) {
-            const tags = el.tags || {};
-            const amenity = tags.amenity;
-            const shop = tags.shop;
-            
-            let color = '#7f8c8d';
-            let height = 6;
-            
-            // Les bâtiments standards sont à 5. On met les POI légèrement plus haut (ou à la même hauteur) pour le réalisme.
-            if (amenity === 'pharmacy') { color = '#2ecc71'; height = 7; }
-            else if (amenity === 'hospital' || amenity === 'clinic') { color = '#e74c3c'; height = 12; }
-            else if (amenity === 'police') { color = '#3498db'; height = 8; }
-            else if (shop === 'supermarket') { color = '#e67e22'; height = 6; }
-            
-            let coords = [];
-            
-            if (el.type === 'node') {
-                // C'est un simple point (très fréquent sur OpenStreetMap)
-                // On crée un petit carré autour du point pour pouvoir l'extruder en 3D
-                // (s est beaucoup plus petit pour correspondre à la taille d'une vraie boutique)
-                const s = 0.00004; 
-                coords = [
-                    [el.lon - s, el.lat - s],
-                    [el.lon + s, el.lat - s],
-                    [el.lon + s, el.lat + s],
-                    [el.lon - s, el.lat + s],
-                    [el.lon - s, el.lat - s] // fermer le polygone
-                ];
-            } else if (el.type === 'way' && el.geometry) {
-                coords = el.geometry.map(g => [g.lon, g.lat]);
-                if (coords.length >= 3 && (coords[0][0] !== coords[coords.length-1][0] || coords[0][1] !== coords[coords.length-1][1])) {
-                    coords.push(coords[0]);
-                }
+  for (let i = 0; i < tags.length; i += 2) {
+    const nodeTag = tags[i];
+    const wayTag = tags[i+1];
+    
+    // Bounding box pour l'Île-de-France : approx 48.12, 1.44, 49.24, 3.56
+    const bbox = "48.12,1.44,49.24,3.56";
+    const query = `
+      [out:json][timeout:180];
+      (
+        ${nodeTag}(${bbox});
+        ${wayTag}(${bbox});
+      );
+      out geom;
+    `;
+    
+    console.log(`Fetching ${nodeTag.split('=')[1]}...`);
+    
+    let success = false;
+    let attempts = 0;
+    while (!success && attempts < 5) {
+      try {
+        const response = await fetch("https://overpass.openstreetmap.fr/api/interpreter", {
+            method: "POST",
+            headers: {
+                "Accept": "application/json",
+                "User-Agent": "HackathonApp",
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            body: "data=" + encodeURIComponent(query)
+        });
+        
+        if (response.status === 429) {
+          console.log("Rate limit hit (429), waiting 15 seconds...");
+          await new Promise(r => setTimeout(r, 15000));
+          attempts++;
+          continue;
+        }
+        
+        if (!response.ok) {
+          console.error(`HTTP Error: ${response.status}`);
+          break;
+        }
+        
+        const data = await response.json();
+        let count = 0;
+        
+        if (data.elements) {
+            for (const el of data.elements) {
+                const elTags = el.tags || {};
+                const amenity = elTags.amenity;
+                const shop = elTags.shop;
                 
-                // Si c'est un hôpital, on vérifie si la zone n'est pas gigantesque (domaine complet de la Pitié-Salpêtrière par ex)
-                if (amenity === 'hospital' && coords.length > 3) {
-                    let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
-                    coords.forEach(c => {
-                        if(c[0] < minLon) minLon = c[0];
-                        if(c[0] > maxLon) maxLon = c[0];
-                        if(c[1] < minLat) minLat = c[1];
-                        if(c[1] > maxLat) maxLat = c[1];
-                    });
-                    const widthLon = maxLon - minLon;
-                    const heightLat = maxLat - minLat;
+                let color = '#7f8c8d';
+                let height = 6;
+                
+                if (amenity === 'pharmacy') { color = '#2ecc71'; height = 7; }
+                else if (amenity === 'hospital' || amenity === 'clinic') { color = '#e74c3c'; height = 12; }
+                else if (amenity === 'police') { color = '#3498db'; height = 8; }
+                else if (shop === 'supermarket') { color = '#e67e22'; height = 6; }
+                else { continue; } 
+                
+                let coords = [];
+                
+                if (el.type === 'node') {
+                    const s = 0.00004; 
+                    coords = [
+                        [el.lon - s, el.lat - s], [el.lon + s, el.lat - s],
+                        [el.lon + s, el.lat + s], [el.lon - s, el.lat + s],
+                        [el.lon - s, el.lat - s]
+                    ];
+                } else if (el.type === 'way' && el.geometry) {
+                    coords = el.geometry.map(g => [g.lon, g.lat]);
+                    if (coords.length >= 3 && (coords[0][0] !== coords[coords.length-1][0] || coords[0][1] !== coords[coords.length-1][1])) {
+                        coords.push(coords[0]);
+                    }
                     
-                    // Si l'emprise dépasse environ 80-100 mètres (0.001 degrés en lat/lon), on réduit au point central
-                    if (widthLon > 0.001 || heightLat > 0.001) {
-                        const centerLon = (minLon + maxLon) / 2;
-                        const centerLat = (minLat + maxLat) / 2;
-                        const s = 0.0001; // On fait un carré moyen (plus grand qu'une pharmacie, mais pas géant)
-                        coords = [
-                            [centerLon - s, centerLat - s],
-                            [centerLon + s, centerLat - s],
-                            [centerLon + s, centerLat + s],
-                            [centerLon - s, centerLat + s],
-                            [centerLon - s, centerLat - s]
-                        ];
+                    if (amenity === 'hospital' && coords.length > 3) {
+                        let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
+                        coords.forEach(c => {
+                            if(c[0] < minLon) minLon = c[0];
+                            if(c[0] > maxLon) maxLon = c[0];
+                            if(c[1] < minLat) minLat = c[1];
+                            if(c[1] > maxLat) maxLat = c[1];
+                        });
+                        const widthLon = maxLon - minLon;
+                        const heightLat = maxLat - minLat;
+                        
+                        if (widthLon > 0.001 || heightLat > 0.001) {
+                            const centerLon = (minLon + maxLon) / 2;
+                            const centerLat = (minLat + maxLat) / 2;
+                            const s = 0.0001; 
+                            coords = [
+                                [centerLon - s, centerLat - s], [centerLon + s, centerLat - s],
+                                [centerLon + s, centerLat + s], [centerLon - s, centerLat + s],
+                                [centerLon - s, centerLat - s]
+                            ];
+                        }
                     }
                 }
-            }
-
-            if (coords.length >= 4) {
-                features.push({
-                    type: "Feature",
-                    properties: { color, height },
-                    geometry: { type: "Polygon", coordinates: [coords] }
-                });
+  
+                if (coords.length >= 4) {
+                    allFeatures.push({
+                        type: "Feature",
+                        properties: { color, height },
+                        geometry: { type: "Polygon", coordinates: [coords] }
+                    });
+                    count++;
+                }
             }
         }
+        console.log(`-> Added ${count} items.`);
+        success = true;
+        
+        // Pause to respect API rate limits before the next query
+        await new Promise(r => setTimeout(r, 5000));
+        
+      } catch (e) {
+        console.error("Fetch error:", e);
+        await new Promise(r => setTimeout(r, 10000));
+        attempts++;
+      }
     }
-    const geojson = { type: "FeatureCollection", features };
-    const jsContent = "const poisData = " + JSON.stringify(geojson, null, 2) + ";";
-    fs.writeFileSync("pois.js", jsContent, "utf-8");
-    console.log(`Success! Saved ${features.length} points of interest to pois.js`);
-})
-.catch(e => console.error("Error:", e));
+  }
+  
+  const geojson = { type: "FeatureCollection", features: allFeatures };
+  const jsContent = "const poisData = " + JSON.stringify(geojson) + ";"; // Removed formatting spaces to reduce file size
+  fs.writeFileSync("pois.js", jsContent, "utf-8");
+  console.log(`\nSuccess! Saved a total of ${allFeatures.length} points of interest to pois.js`);
+}
+
+fetchAll();
