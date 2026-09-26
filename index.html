@@ -24,15 +24,28 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             box-shadow: 0 4px 15px rgba(0,0,0,0.5);
             border: 1px solid #333;
+            width: 250px;
         }
+        
+        button:hover { filter: brightness(1.1); }
     </style>
 </head>
 <body>
 
     <div id="hud">
-        <h3 style="margin-top: 0; color: #fff; text-transform: uppercase; font-size: 1.1em; letter-spacing: 1px;">Contrôles</h3>
+        <h3 style="margin-top: 0; color: #fff; text-transform: uppercase; font-size: 1.1em; letter-spacing: 1px;">Exploration</h3>
         <p style="font-size: 0.85em; margin-bottom: 5px; color: #aaa;">🖱️ <b>Molette :</b> Dézoomer</p>
-        <p style="font-size: 0.85em; margin-bottom: 0; color: #aaa;">🖱️ <b>Clic Droit + Glisser :</b> Tourner la caméra</p>
+        <p style="font-size: 0.85em; margin-bottom: 15px; color: #aaa;">🖱️ <b>Clic Droit + Glisser :</b> Tourner la caméra</p>
+        
+        <button id="boat-btn" style="width: 100%; padding: 10px; background: #0984e3; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; text-transform: uppercase;">Piloter le Bateau</button>
+        
+        <div id="boat-controls" style="display: none; margin-top: 15px; border-top: 1px solid #444; padding-top: 10px;">
+            <p style="font-size: 0.85em; color: #00d2d3; margin: 0 0 10px 0;"><b>MODE BATEAU ACTIVÉ</b></p>
+            <p style="font-size: 0.85em; color: #aaa; margin: 0;"><b>Z / W / ⬆️ :</b> Avancer</p>
+            <p style="font-size: 0.85em; color: #aaa; margin: 0;"><b>S / ⬇️ :</b> Reculer</p>
+            <p style="font-size: 0.85em; color: #aaa; margin: 0;"><b>Q / A / D / ⬅️ ➡️ :</b> Tourner</p>
+            <p style="font-size: 0.85em; color: #aaa; margin: 10px 0 0 0;"><b>Echap :</b> Quitter le bateau</p>
+        </div>
     </div>
 
     <div id="map"></div>
@@ -41,20 +54,66 @@
         const map = new maplibregl.Map({
             container: 'map',
             style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-            center: [2.3488, 48.8534], // Paris
+            center: [2.3430, 48.8550], // Caméra au dessus de la Seine au début
             zoom: 15.5,
             pitch: 65,
             bearing: -30,
             antialias: true
         });
 
+        // --- GESTION DU BATEAU ---
+        let boatCoords = [2.3430, 48.8550]; // Départ dans la Seine
+        let boatBearing = -45; // Orienté le long du fleuve
+        let boatMode = false;
+        let boatSpeed = 0;
+        
+        const keys = {};
+        window.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; });
+        window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+        // Générateur de forme de bateau (un triangle allongé)
+        function getBoatPolygon(lng, lat, bearing) {
+            const rad = -bearing * Math.PI / 180;
+            const cos = Math.cos(rad);
+            const sin = Math.sin(rad);
+            const lonScale = Math.cos(lat * Math.PI / 180);
+            
+            const w = 0.00008; // Largeur du bateau
+            const l = 0.00015; // Longueur du bateau
+            
+            const pts = [
+                [0, l],       // Pointe avant
+                [w, -l],      // Arrière droit
+                [-w, -l],     // Arrière gauche
+                [0, l]        // Fermeture
+            ];
+            
+            const coords = pts.map(p => {
+                const dx = p[0] * cos - p[1] * sin;
+                const dy = p[0] * sin + p[1] * cos;
+                return [lng + dx / lonScale, lat + dy];
+            });
+            
+            return {
+                type: 'Feature',
+                geometry: { type: 'Polygon', coordinates: [coords] }
+            };
+        }
+
         map.on('style.load', () => {
             map.setProjection({ type: 'globe' });
+            
+            // Colorer l'eau (la couche s'appelle 'water' sur Carto)
+            try {
+                map.setPaintProperty('water', 'fill-color', '#0984e3');
+                map.setPaintProperty('water', 'fill-opacity', 0.5);
+            } catch(e) { console.log(e); }
         });
 
         map.on('load', () => {
             map.setPaintProperty('background', 'background-color', '#050505');
 
+            // Bâtiments géants de 500m
             map.addLayer({
                 'id': '3d-buildings',
                 'source': 'carto',
@@ -68,14 +127,114 @@
                 ],
                 'paint': {
                     'fill-extrusion-color': '#1a1c23', 
-                    'fill-extrusion-height': 500, // Bâtiments TITANESQUES
+                    'fill-extrusion-height': 500, 
                     'fill-extrusion-base': 0,
                     'fill-extrusion-opacity': 1.0 
                 }
             });
             
-            console.log("Carte Globe 3D chargée avec succès !");
+            // Source et Couche pour le bateau 3D
+            map.addSource('boat', {
+                type: 'geojson',
+                data: getBoatPolygon(boatCoords[0], boatCoords[1], boatBearing)
+            });
+
+            map.addLayer({
+                'id': '3d-boat',
+                'type': 'fill-extrusion',
+                'source': 'boat',
+                'paint': {
+                    'fill-extrusion-color': '#00d2d3', // Couleur cyan fluo
+                    'fill-extrusion-height': 15,       // Hauteur 15m pour bien le voir dans la rivière
+                    'fill-extrusion-base': 0,
+                    'fill-extrusion-opacity': 1.0 
+                }
+            });
+            
+            // Lancer la boucle d'animation
+            requestAnimationFrame(animate);
+            console.log("Carte et Bateau chargés avec succès !");
         });
+
+        // Activation / Désactivation du bateau
+        document.getElementById('boat-btn').addEventListener('click', () => {
+            boatMode = !boatMode;
+            if (boatMode) {
+                document.getElementById('boat-btn').innerText = "QUITTER LE BATEAU";
+                document.getElementById('boat-btn').style.background = "#e74c3c";
+                document.getElementById('boat-controls').style.display = "block";
+                
+                // Voler vers le bateau (Vue subjective 1ère/3ème personne)
+                map.flyTo({ 
+                    center: boatCoords, 
+                    zoom: 17, 
+                    pitch: 80, // Très penché
+                    bearing: boatBearing, 
+                    speed: 1.5 
+                });
+            } else {
+                document.getElementById('boat-btn').innerText = "PILOTER LE BATEAU";
+                document.getElementById('boat-btn').style.background = "#0984e3";
+                document.getElementById('boat-controls').style.display = "none";
+                
+                // Reprendre une vue aérienne classique
+                map.flyTo({ 
+                    pitch: 65, 
+                    zoom: 15.5,
+                    speed: 1.5 
+                });
+            }
+        });
+
+        // Raccourci Echap pour quitter le bateau
+        window.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && boatMode) {
+                document.getElementById('boat-btn').click();
+            }
+        });
+
+        // Boucle du moteur de jeu
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            if (!boatMode) return; 
+
+            // Rotation
+            if (keys['q'] || keys['a'] || keys['arrowleft']) boatBearing -= 2.5;
+            if (keys['d'] || keys['arrowright']) boatBearing += 2.5;
+            
+            // Accélération et Friction
+            if (keys['z'] || keys['w'] || keys['arrowup']) {
+                boatSpeed = Math.min(boatSpeed + 0.000003, 0.00006);
+            } else if (keys['s'] || keys['arrowdown']) {
+                boatSpeed = Math.max(boatSpeed - 0.000003, -0.00003);
+            } else {
+                boatSpeed *= 0.95; 
+            }
+
+            // Déplacement effectif
+            if (Math.abs(boatSpeed) > 0.000001 || keys['q'] || keys['a'] || keys['d'] || keys['arrowleft'] || keys['arrowright']) {
+                const moveRad = boatBearing * Math.PI / 180;
+                const dx = boatSpeed * Math.sin(moveRad);
+                const dy = boatSpeed * Math.cos(moveRad);
+                
+                const lonScale = Math.cos(boatCoords[1] * Math.PI / 180);
+                boatCoords[0] += dx / lonScale;
+                boatCoords[1] += dy;
+
+                // Mettre à jour la géométrie 3D du bateau
+                if (map.getSource('boat')) {
+                    map.getSource('boat').setData(getBoatPolygon(boatCoords[0], boatCoords[1], boatBearing));
+                }
+
+                // Faire suivre la caméra derrière le bateau de manière fluide
+                map.jumpTo({
+                    center: boatCoords,
+                    bearing: boatBearing,
+                    pitch: 80
+                });
+            }
+        }
     </script>
 </body>
 </html>
