@@ -81,26 +81,47 @@
                 'type': 'fill-extrusion',
                 'minzoom': 13,
                 'paint': {
-                    'fill-extrusion-color': '#2a2a2a',
-                    'fill-extrusion-height': 5, // Bâtiments beaucoup moins hauts
+                    // Couleur plus cyberpunk, légèrement bleue nuit
+                    'fill-extrusion-color': '#1a1c23', 
+                    // Hauteur réduite pour faire plateau de jeu propre
+                    'fill-extrusion-height': 4, 
                     'fill-extrusion-base': 0,
-                    'fill-extrusion-opacity': 1.0 // Totalement opaque (non transparent)
+                    // Légère transparence pour un effet hologramme / jeu vidéo
+                    'fill-extrusion-opacity': 0.85 
                 }
             });
 
-            // 2. Charger les POIs pré-enregistrés
             map.addSource('pois', { type: 'geojson', data: poisData });
 
-            // Base du bâtiment POI (solide)
+            // On sépare la couche POI en deux pour un effet "Néon" (un bloc interne brillant, un bloc externe transparent)
+            
+            // 1. Le "Cœur" du POI (Solide, brillant, plus petit en hauteur)
             map.addLayer({
-                'id': '3d-pois-base',
+                'id': '3d-pois-core',
                 'type': 'fill-extrusion',
                 'source': 'pois',
                 'paint': {
                     'fill-extrusion-color': ['get', 'color'],
                     'fill-extrusion-height': ['get', 'height'],
                     'fill-extrusion-base': 0,
-                    'fill-extrusion-opacity': 1.0 // Totalement opaque
+                    'fill-extrusion-opacity': 1.0 
+                }
+            });
+
+            // 2. Le "Halo" du POI (Transparent, plus haut, crée un faisceau lumineux)
+            map.addLayer({
+                'id': '3d-pois-halo',
+                'type': 'fill-extrusion',
+                'source': 'pois',
+                'paint': {
+                    'fill-extrusion-color': ['get', 'color'],
+                    'fill-extrusion-height': [
+                        '+', 
+                        ['get', 'height'], 
+                        15 // Le halo monte 15 mètres plus haut
+                    ],
+                    'fill-extrusion-base': 0,
+                    'fill-extrusion-opacity': 0.3 // Très transparent
                 }
             });
             
