@@ -75,41 +75,27 @@ async function fetchAll() {
                 
                 let coords = [];
                 
+                // On calcule le centre
+                let cLon = 0, cLat = 0;
                 if (el.type === 'node') {
-                    const s = 0.00004; 
-                    coords = [
-                        [el.lon - s, el.lat - s], [el.lon + s, el.lat - s],
-                        [el.lon + s, el.lat + s], [el.lon - s, el.lat + s],
-                        [el.lon - s, el.lat - s]
-                    ];
+                    cLon = el.lon;
+                    cLat = el.lat;
                 } else if (el.type === 'way' && el.geometry) {
-                    coords = el.geometry.map(g => [g.lon, g.lat]);
-                    if (coords.length >= 3 && (coords[0][0] !== coords[coords.length-1][0] || coords[0][1] !== coords[coords.length-1][1])) {
-                        coords.push(coords[0]);
-                    }
-                    
-                    if (amenity === 'hospital' && coords.length > 3) {
-                        let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
-                        coords.forEach(c => {
-                            if(c[0] < minLon) minLon = c[0];
-                            if(c[0] > maxLon) maxLon = c[0];
-                            if(c[1] < minLat) minLat = c[1];
-                            if(c[1] > maxLat) maxLat = c[1];
-                        });
-                        const widthLon = maxLon - minLon;
-                        const heightLat = maxLat - minLat;
-                        
-                        if (widthLon > 0.001 || heightLat > 0.001) {
-                            const centerLon = (minLon + maxLon) / 2;
-                            const centerLat = (minLat + maxLat) / 2;
-                            const s = 0.0001; 
-                            coords = [
-                                [centerLon - s, centerLat - s], [centerLon + s, centerLat - s],
-                                [centerLon + s, centerLat + s], [centerLon - s, centerLat + s],
-                                [centerLon - s, centerLat - s]
-                            ];
-                        }
-                    }
+                    el.geometry.forEach(g => { cLon += g.lon; cLat += g.lat; });
+                    cLon /= el.geometry.length;
+                    cLat /= el.geometry.length;
+                }
+                
+                // On crée un énorme carré (environ 25 mètres x 25 mètres) autour de ce centre,
+                // pour former un gros bloc visible, uniforme et carré
+                if (cLon !== 0 && cLat !== 0) {
+                    const sLon = 0.00015; // Taille Lattitude/Longitude approximative
+                    const sLat = 0.00010;
+                    coords = [
+                        [cLon - sLon, cLat - sLat], [cLon + sLon, cLat - sLat],
+                        [cLon + sLon, cLat + sLat], [cLon - sLon, cLat + sLat],
+                        [cLon - sLon, cLat - sLat]
+                    ];
                 }
   
                 if (coords.length >= 4) {

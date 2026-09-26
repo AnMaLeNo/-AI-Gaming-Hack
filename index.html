@@ -91,16 +91,29 @@
 
             map.addSource('pois', { type: 'geojson', data: poisData });
 
-            // Le POI (Bloc coloré opaque) posé directement sur le sol (base 0)
+            // Le POI principal (Bloc coloré opaque)
             map.addLayer({
                 'id': '3d-pois',
                 'type': 'fill-extrusion',
                 'source': 'pois',
                 'paint': {
                     'fill-extrusion-color': ['get', 'color'],
-                    'fill-extrusion-height': ['get', 'height'], // La hauteur d'origine (7, 12, etc.)
-                    'fill-extrusion-base': 0, // Posé sur le sol
-                    'fill-extrusion-opacity': 1.0 // Totalement opaque
+                    'fill-extrusion-height': ['+', ['get', 'height'], 5], 
+                    'fill-extrusion-base': 0, 
+                    'fill-extrusion-opacity': 1.0 
+                }
+            });
+
+            // On ajoute une "bordure" très épaisse extrudée pour "gonfler" le bâtiment 
+            // et boucher les petits trous autour
+            map.addLayer({
+                'id': '3d-pois-outline',
+                'type': 'line',
+                'source': 'pois',
+                'paint': {
+                    'line-color': ['get', 'color'],
+                    'line-width': 10, // Rendre le bâtiment plus "gros" de 10 pixels
+                    'line-opacity': 1.0
                 }
             });
             
