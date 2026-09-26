@@ -95,33 +95,35 @@
 
             // On sépare la couche POI en deux pour un effet "Néon" (un bloc interne brillant, un bloc externe transparent)
             
-            // 1. Le "Cœur" du POI (Solide, brillant, plus petit en hauteur)
+            // 1. Le "Cœur" du POI (Commence à la hauteur des toits gris)
             map.addLayer({
                 'id': '3d-pois-core',
                 'type': 'fill-extrusion',
                 'source': 'pois',
                 'paint': {
                     'fill-extrusion-color': ['get', 'color'],
-                    'fill-extrusion-height': ['get', 'height'],
-                    'fill-extrusion-base': 0,
+                    // La base commence au sommet des bâtiments gris (4m)
+                    'fill-extrusion-base': 4,
+                    // La hauteur finale est la hauteur du POI + la base
+                    'fill-extrusion-height': ['+', ['get', 'height'], 4],
                     'fill-extrusion-opacity': 1.0 
                 }
             });
 
-            // 2. Le "Halo" du POI (Transparent, plus haut, crée un faisceau lumineux)
+            // 2. Le "Halo" du POI
             map.addLayer({
                 'id': '3d-pois-halo',
                 'type': 'fill-extrusion',
                 'source': 'pois',
                 'paint': {
                     'fill-extrusion-color': ['get', 'color'],
+                    'fill-extrusion-base': 4,
                     'fill-extrusion-height': [
                         '+', 
                         ['get', 'height'], 
-                        15 // Le halo monte 15 mètres plus haut
+                        19 // 15 de halo + 4 de base
                     ],
-                    'fill-extrusion-base': 0,
-                    'fill-extrusion-opacity': 0.3 // Très transparent
+                    'fill-extrusion-opacity': 0.3
                 }
             });
             
