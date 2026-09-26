@@ -5,18 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hackathon Game - Paris Survivor</title>
     
-    <!-- Librairie MapLibre v5 (Support du Globe 3D) -->
     <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css" rel="stylesheet" />
-    
-    <!-- Chargement direct des données POI pour éviter les blocages de sécurité du navigateur -->
-    <script src="pois.js"></script>
     
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; }
         
-        /* Interface Utilisateur / HUD */
         #hud {
             position: absolute;
             top: 20px;
@@ -30,50 +25,36 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.5);
             border: 1px solid #333;
         }
-
-        .legend-item { display: flex; align-items: center; margin-bottom: 8px; font-weight: 500;}
-        .color-box { width: 15px; height: 15px; margin-right: 10px; border-radius: 3px; box-shadow: 0 0 5px currentColor; }
     </style>
 </head>
 <body>
 
     <div id="hud">
-        <h3 style="margin-top: 0; color: #fff; text-transform: uppercase; font-size: 1.1em; letter-spacing: 1px;">Points Stratégiques</h3>
-        <div class="legend-item"><div class="color-box" style="background: #2ecc71; color: #2ecc71;"></div> Pharmacie</div>
-        <div class="legend-item"><div class="color-box" style="background: #e74c3c; color: #e74c3c;"></div> Hôpital</div>
-        <div class="legend-item"><div class="color-box" style="background: #3498db; color: #3498db;"></div> Commissariat</div>
-        <div class="legend-item"><div class="color-box" style="background: #e67e22; color: #e67e22;"></div> Supermarché</div>
-        <div class="legend-item"><div class="color-box" style="background: #444444; color: transparent; box-shadow: none;"></div> Bâtiment standard</div>
-        <hr style="border-color: #444; margin: 15px 0;">
-        <p style="font-size: 0.85em; margin-bottom: 5px; color: #aaa;">🖱️ <b>Molette :</b> Dézoomer pour voir la planète</p>
-        <p style="font-size: 0.85em; margin-bottom: 0; color: #aaa;">🖱️ <b>Clic Droit + Glisser :</b> Tourner la caméra 3D</p>
+        <h3 style="margin-top: 0; color: #fff; text-transform: uppercase; font-size: 1.1em; letter-spacing: 1px;">Contrôles</h3>
+        <p style="font-size: 0.85em; margin-bottom: 5px; color: #aaa;">🖱️ <b>Molette :</b> Dézoomer</p>
+        <p style="font-size: 0.85em; margin-bottom: 0; color: #aaa;">🖱️ <b>Clic Droit + Glisser :</b> Tourner la caméra</p>
     </div>
 
-    <!-- Conteneur de la carte -->
     <div id="map"></div>
 
     <script>
-        // Initialisation de la carte avec la projection Globe !
         const map = new maplibregl.Map({
             container: 'map',
             style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
             center: [2.3488, 48.8534], // Paris
             zoom: 15.5,
-            pitch: 65, // Inclinaison 3D forte
+            pitch: 65,
             bearing: -30,
             antialias: true
         });
 
-        // Activer la projection globe après le chargement du style
         map.on('style.load', () => {
             map.setProjection({ type: 'globe' });
         });
 
         map.on('load', () => {
-            // Ajouter un ciel étoilé / espace profond pour quand on regarde le globe
             map.setPaintProperty('background', 'background-color', '#050505');
 
-            // 1. Ajouter le relief sur TOUS les bâtiments standards
             map.addLayer({
                 'id': '3d-buildings',
                 'source': 'carto',
@@ -82,48 +63,14 @@
                 'minzoom': 13,
                 'filter': [
                     'all',
-                    // On ne dessine pas les bâtiments qui sont signalés comme "souterrains"
                     ['!=', ['get', 'underground'], 'true'],
-                    // On peut masquer les bâtiments qui n'ont pas de nom et qui sont petits, 
-                    // mais le plus efficace est de filtrer ceux qui n'ont pas le statut de bâtiment principal.
-                    // Sur Carto, filtrer par render_height ou masquer les "trous" si possible.
-                    // Une astuce courante pour lisser : n'afficher que les bâtiments > 5m de base
                     ['>=', ['get', 'render_height'], 5] 
                 ],
                 'paint': {
                     'fill-extrusion-color': '#1a1c23', 
-                    'fill-extrusion-height': 500, // Bâtiments TITANESQUES de 500 mètres
+                    'fill-extrusion-height': 500, // Bâtiments TITANESQUES
                     'fill-extrusion-base': 0,
                     'fill-extrusion-opacity': 1.0 
-                }
-            });
-
-            map.addSource('pois', { type: 'geojson', data: poisData });
-
-            // Le POI principal (Bloc coloré opaque)
-            map.addLayer({
-                'id': '3d-pois',
-                'type': 'fill-extrusion',
-                'source': 'pois',
-                'paint': {
-                    'fill-extrusion-color': ['get', 'color'],
-                    // On ajoute 505 mètres à tous les POIs (Pour être plus grands que les 500m des bâtiments)
-                    'fill-extrusion-height': ['+', ['get', 'height'], 505], 
-                    'fill-extrusion-base': 0, 
-                    'fill-extrusion-opacity': 1.0 
-                }
-            });
-
-            // On ajoute une "bordure" très épaisse extrudée pour "gonfler" le bâtiment 
-            // et boucher les petits trous autour
-            map.addLayer({
-                'id': '3d-pois-outline',
-                'type': 'line',
-                'source': 'pois',
-                'paint': {
-                    'line-color': ['get', 'color'],
-                    'line-width': 10, // Rendre le bâtiment plus "gros" de 10 pixels
-                    'line-opacity': 1.0
                 }
             });
             
