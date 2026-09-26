@@ -150,10 +150,27 @@
                     'fill-extrusion-opacity': 1.0 
                 }
             });
+
+            // Source et Couche pour la horde de Zombies (Piliers rouges)
+            map.addSource('zombies', { type: 'geojson', data: zombiesData });
+            
+            map.addLayer({
+                'id': '3d-zombies',
+                'type': 'circle',
+                'source': 'zombies',
+                'paint': {
+                    'circle-color': '#e84118',
+                    'circle-radius': 5,
+                    'circle-pitch-alignment': 'map'
+                }
+            });
+
+            // On génère 1000 zombies dans les rues de Paris au démarrage
+            spawnZombies(1000);
             
             // Lancer la boucle d'animation
             requestAnimationFrame(animate);
-            console.log("Carte et Bateau chargés avec succès !");
+            console.log("Carte, Bateau et Zombies chargés avec succès !");
         });
 
         // Activation / Désactivation du bateau
@@ -233,6 +250,62 @@
                     bearing: boatBearing,
                     pitch: 45
                 });
+            }
+            
+            // --- IA DES ZOMBIES ---
+            if (boatMode && zombiesData.features.length > 0) {
+                let zombiesMoved = false;
+                zombiesData.features.forEach(z => {
+                    const zCoords = z.geometry.coordinates;
+                    
+                    // Calculer le vecteur vers le joueur
+                    const dx = boatCoords[0] - zCoords[0];
+                    const dy = boatCoords[1] - zCoords[1];
+                    const distance = Math.sqrt(dx*dx + dy*dy);
+                    
+                    // Si un zombie touche le joueur (Hitbox approximative 15 mètres)
+                    if (distance < 0.00015) {
+                        if (!z.properties.dead) {
+                            alert("WASTED ! Un zombie t'a dévoré en plein Paris !");
+                            z.properties.dead = true;
+                            document.getElementById('boat-btn').click(); // Quitter le bateau
+                        }
+                    }
+                    
+                    // Déplacement du zombie (Vitesse très lente)
+                    if (distance > 0 && !z.properties.dead) {
+                        const speed = 0.000008; // Vitesse du zombie
+                        zCoords[0] += (dx / distance) * speed;
+                        zCoords[1] += (dy / distance) * speed;
+                        zombiesMoved = true;
+                    }
+                });
+                
+                // Mettre à jour la source des zombies si au moins un a bougé
+                if (zombiesMoved && map.getSource('zombies')) {
+                    map.getSource('zombies').setData(zombiesData);
+                }
+            }
+        }
+
+        // --- GENERATEUR DE ZOMBIES ---
+        let zombiesData = { type: 'FeatureCollection', features: [] };
+        
+        function spawnZombies(count) {
+            zombiesData.features = [];
+            for(let i=0; i<count; i++) {
+                // Spawn aléatoire autour de Paris (Notre-Dame)
+                const lat = 48.8550 + (Math.random() - 0.5) * 0.01;
+                const lng = 2.3430 + (Math.random() - 0.5) * 0.01;
+                zombiesData.features.push({
+                    type: 'Feature',
+                    properties: { dead: false },
+                    geometry: { type: 'Point', coordinates: [lng, lat] }
+                });
+            }
+            
+            if (map.getSource('zombies')) {
+                map.getSource('zombies').setData(zombiesData);
             }
         }
     </script>
