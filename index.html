@@ -55,9 +55,9 @@
             container: 'map',
             style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
             center: [2.3430, 48.8550], // Caméra au dessus de la Seine au début
-            zoom: 15.5,
-            pitch: 65,
-            bearing: -30,
+            zoom: 16, // Zoom plus proche pour le style jeu
+            pitch: 45, // Vue isométrique comme sur ton image (pas trop penché)
+            bearing: -45, // Angle diagonal
             antialias: true
         });
 
@@ -127,7 +127,7 @@
                 ],
                 'paint': {
                     'fill-extrusion-color': '#1a1c23', 
-                    'fill-extrusion-height': 500, 
+                    'fill-extrusion-height': 5, // Bâtiments bas (5m) pour un beau plateau de jeu lisible
                     'fill-extrusion-base': 0,
                     'fill-extrusion-opacity': 1.0 
                 }
@@ -164,11 +164,11 @@
                 document.getElementById('boat-btn').style.background = "#e74c3c";
                 document.getElementById('boat-controls').style.display = "block";
                 
-                // Voler vers le bateau (Vue subjective 1ère/3ème personne)
+                // Voler vers le bateau (Vue isométrique)
                 map.flyTo({ 
                     center: boatCoords, 
                     zoom: 17, 
-                    pitch: 80, // Très penché
+                    pitch: 45, // Vue en biais isométrique
                     bearing: boatBearing, 
                     speed: 1.5 
                 });
@@ -179,8 +179,8 @@
                 
                 // Reprendre une vue aérienne classique
                 map.flyTo({ 
-                    pitch: 65, 
-                    zoom: 15.5,
+                    pitch: 45, 
+                    zoom: 16,
                     speed: 1.5 
                 });
             }
@@ -231,7 +231,7 @@
                 map.jumpTo({
                     center: boatCoords,
                     bearing: boatBearing,
-                    pitch: 80
+                    pitch: 45
                 });
             }
         }
