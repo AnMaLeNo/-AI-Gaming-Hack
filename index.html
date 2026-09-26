@@ -80,11 +80,20 @@
                 'source-layer': 'building',
                 'type': 'fill-extrusion',
                 'minzoom': 13,
+                'filter': [
+                    'all',
+                    // On ne dessine pas les bâtiments qui sont signalés comme "souterrains"
+                    ['!=', ['get', 'underground'], 'true'],
+                    // On peut masquer les bâtiments qui n'ont pas de nom et qui sont petits, 
+                    // mais le plus efficace est de filtrer ceux qui n'ont pas le statut de bâtiment principal.
+                    // Sur Carto, filtrer par render_height ou masquer les "trous" si possible.
+                    // Une astuce courante pour lisser : n'afficher que les bâtiments > 5m de base
+                    ['>=', ['get', 'render_height'], 5] 
+                ],
                 'paint': {
                     'fill-extrusion-color': '#1a1c23', 
                     'fill-extrusion-height': 4, 
                     'fill-extrusion-base': 0,
-                    // Bâtiments totalement opaques (non transparents)
                     'fill-extrusion-opacity': 1.0 
                 }
             });
